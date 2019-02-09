@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"os/signal"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/qiniu/log"
 	"github.com/satori/go.uuid"
 )
 
@@ -40,13 +39,14 @@ func NewActionRequest(serial string, name string) *ActionRequest {
 }
 
 func GetActionRequest(w http.ResponseWriter, r *http.Request) {
-	action := NewActionRequest("testSerial", "rebootDevice")
-	log.Printf("Request Action #%v \n", action.ID)
+	params := mux.Vars(r)
+	serial := params["serial"]
+	action := NewActionRequest(serial, "rebootDevice")
+	log.Printf("Request Action #%v on device \"%v\"\n", action.ID, serial)
 	json.NewEncoder(w).Encode(action)
 }
 
 func DeleteActionRequest(w http.ResponseWriter, r *http.Request) {
-	log.Println(httputil.DumpRequestOut(r, true))
 	params := mux.Vars(r)
 	id := params["ID"]
 	log.Printf("Action #%v can be removed\n", id)
@@ -62,13 +62,14 @@ func logRequest(handler http.Handler) http.Handler {
 
 func main() {
 	var wait time.Duration
+	var port uint
 	flag.DurationVar(&wait, "graceful-timeout", time.Second*15, "the duration for which the server gracefully wait for existing connections to finish - e.g. 15s or 1m")
+	flag.UintVar(&port, "port", 8000, "the port http server will open")
 	flag.Parse()
 
 	router := mux.NewRouter()
-	router.HandleFunc("/action/{id}", GetActionRequest).Methods("GET")
-	router.HandleFunc("/action/{id}", DeleteActionRequest).Methods("DELETE")
-	port := "8000"
+	router.HandleFunc("/action/{serial}", GetActionRequest).Methods("GET")
+	router.HandleFunc("/action", DeleteActionRequest).Queries("ID", "{ID}").Methods("DELETE")
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%v", port),
